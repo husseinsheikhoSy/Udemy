@@ -322,7 +322,7 @@
     .progress-label { font-size:12px; font-weight:700; color:var(--accent-dark); min-width:30px; text-align:right; }
 
     /* ── Unlock block: centered "preparing your link" state ── */
-    .steps { display:flex; flex-direction:column; align-items:center; margin-bottom:18px; }
+    .steps { display:flex; flex-direction:column; align-items:center; gap:14px; margin-bottom:18px; }
     .step {
       display: flex; flex-direction: column; align-items: center;
       width: 100%; text-align: center;
@@ -559,7 +559,7 @@
     </div>
 
     <div class="ad-notice" id="ad-notice" style="display:block;">
-      📋 Watch 2 short ads to unlock your free enroll link.
+      📋 Tap each button below to watch an ad. After both, your free enroll link unlocks.
     </div>
 
     <div class="progress-wrap">
@@ -570,16 +570,18 @@
     </div>
 
     <div class="steps">
-      <!-- Single gated step: tracks the 2 required Monetag in-app interstitial views -->
+      <!-- Step 1: first Monetag ad, triggered directly by the user's tap -->
       <div class="step" id="step-1">
-        <div class="step-title">Watching sponsored ads…</div>
-        <div class="step-sub" id="sub-1">Ad 1 of 2 loading…</div>
-        <div class="step-num" id="num-1">
-          ⏳
-          <svg class="countdown-ring" id="ring-1" viewBox="0 0 96 96">
-            <circle cx="48" cy="48" r="42" id="ring-circle-1"/>
-          </svg>
-        </div>
+        <div class="step-title">📺 Watch Ad 1</div>
+        <div class="step-sub" id="sub-1">Tap to start</div>
+        <button class="step-btn" id="btn-ad-1" onclick="watchAd(1)">▶️ Watch Ad</button>
+      </div>
+
+      <!-- Step 2: second Monetag ad, unlocked only after step 1 finishes -->
+      <div class="step locked" id="step-2">
+        <div class="step-title">📺 Watch Ad 2</div>
+        <div class="step-sub" id="sub-2">Unlocks after Ad 1</div>
+        <button class="step-btn" id="btn-ad-2" onclick="watchAd(2)" disabled>▶️ Watch Ad</button>
       </div>
     </div>
 
@@ -627,35 +629,94 @@ const SUPABASE_KEY = "sb_publishable_63UWVbOlukOiUqsmtfQ9Jw_Go1dV3tt";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── Ad / unlock config ────────────────────────────────────────
-// Monetag in-app interstitial (zone 11675677) is configured to show
-// automatically: a 5s delay before the first ad, then a 2nd ad 30s
-// later (frequency: 2, timeout: 5, interval: 30). The enroll link
-// stays locked until both scheduled ad slots have had time to play,
-// so the user genuinely watches 2 ads before it opens.
-const AD_TIMEOUT_SEC   = 5;   // delay before ad #1
-const AD_INTERVAL_SEC  = 30;  // gap before ad #2
-const AD_BUFFER_SEC    = 5;   // grace period after ad #2 to let it finish/close
-const FREE_WAIT_SEC    = AD_TIMEOUT_SEC + AD_INTERVAL_SEC + AD_BUFFER_SEC; // total gate time
+// Two-button, click-triggered ad gate (Monetag zone 11675677).
+// IMPORTANT (Monetag compliance): each ad must be started by a direct
+// user tap, not fired automatically — this is why watchAd() below is
+// only ever called from the buttons' onclick. For this flow the zone
+// should be set to "Rewarded Interstitial" (or "Rewarded Popup") in
+// the Monetag dashboard, since that format is designed to be invoked
+// on-demand and its returned Promise only resolves once the ad has
+// genuinely finished/closed — unlike the "In-App Interstitial" format,
+// which schedules itself automatically and isn't meant to be tied to
+// a button.
+const AD_LOAD_SEC = 7; // minimum "loading" wait per button, so the ad
+                        // SDK has time to actually load & display before
+                        // we consider that slot done.
 
-let freeUnlockDone  = false;
-let monetagStarted  = false;
+let freeUnlockDone = false;
+let ad1Done = false;
+let ad2Done = false;
 
-// Starts Monetag's in-app interstitial schedule. Safe to call once;
-// preloaded SDK tag lives in <head>.
-function startMonetagInAppInterstitial() {
-  if (monetagStarted) return;
-  monetagStarted = true;
-  if (typeof show_11675677 !== 'function') return;
-  show_11675677({
-    type: 'inApp',
-    inAppSettings: {
-      frequency: 2,
-      capping: 0.1,
-      interval: AD_INTERVAL_SEC,
-      timeout: AD_TIMEOUT_SEC,
-      everyPage: false
-    }
+// Fires the Monetag ad and returns a promise that resolves once it's
+// done (resolved, rejected/skipped — either way we don't want to trap
+// the user, so ad errors are swallowed rather than left unhandled).
+function triggerMonetagAd() {
+  if (typeof show_11675677 === 'function') {
+    try {
+      const result = show_11675677();
+      if (result && typeof result.then === 'function') {
+        return result.catch(() => {});
+      }
+    } catch (e) {}
+  }
+  return Promise.resolve();
+}
+
+function minWait(sec) {
+  return new Promise(resolve => setTimeout(resolve, sec * 1000));
+}
+
+// Called directly from the "Watch Ad" buttons' onclick — this user
+// gesture is what triggers the Monetag ad. A short countdown is shown
+// while we wait for BOTH the ad promise to settle AND the minimum
+// AD_LOAD_SEC to elapse, so the slot can't complete before the ad has
+// had a real chance to load and be seen.
+function watchAd(n) {
+  const btn = document.getElementById('btn-ad-' + n);
+  const sub = document.getElementById('sub-' + n);
+  if (!btn || btn.disabled) return;
+
+  btn.disabled = true;
+  btn.classList.add('watching');
+  btn.textContent = '⏳ Loading…';
+
+  let remaining = AD_LOAD_SEC;
+  sub.textContent = `Loading ad… ${remaining}s`;
+  const iv = setInterval(() => {
+    remaining = Math.max(0, remaining - 1);
+    sub.textContent = remaining > 0 ? `Loading ad… ${remaining}s` : 'Almost done…';
+  }, 1000);
+
+  Promise.all([ triggerMonetagAd(), minWait(AD_LOAD_SEC) ]).then(() => {
+    clearInterval(iv);
+    completeAdStep(n);
   });
+}
+
+function completeAdStep(n) {
+  const btn  = document.getElementById('btn-ad-' + n);
+  const sub  = document.getElementById('sub-' + n);
+  const step = document.getElementById('step-' + n);
+
+  btn.classList.remove('watching');
+  btn.classList.add('done-mark');
+  btn.textContent = '✓';
+  sub.textContent = 'Ad watched ✓';
+  step.classList.add('done');
+
+  if (n === 1) {
+    ad1Done = true;
+    const step2 = document.getElementById('step-2');
+    const btn2  = document.getElementById('btn-ad-2');
+    step2.classList.remove('locked');
+    btn2.disabled = false;
+  } else if (n === 2) {
+    ad2Done = true;
+    freeUnlockDone = true;
+    document.getElementById('ad-notice').textContent = '✅ Both ads watched — your link is unlocked.';
+    unlockEnroll();
+    launchConfetti();
+  }
 }
 
 // ── start_param decode ──────────────────────────────────────────
@@ -897,73 +958,6 @@ function showCard() {
   document.getElementById('main-card').classList.add('visible');
 }
 
-// ══════════════════════════════════════════════════════════════
-//  Two-ad gate — the Monetag in-app interstitial schedule (started in
-//  startMonetagInAppInterstitial) shows ad #1 after AD_TIMEOUT_SEC and
-//  ad #2 after another AD_INTERVAL_SEC. The enroll button only unlocks
-//  once both slots have elapsed (plus a short buffer), so the join link
-//  never opens before the user has been shown both ads.
-// ══════════════════════════════════════════════════════════════
-function startAdGateCountdown() {
-  startMonetagInAppInterstitial();
-
-  const ring   = document.getElementById('ring-1');
-  const circle = document.getElementById('ring-circle-1');
-  const sub    = document.getElementById('sub-1');
-
-  const circumference = 2 * Math.PI * 42;
-  circle.style.strokeDasharray  = circumference;
-  circle.style.strokeDashoffset = circumference;
-  ring.classList.add('active');
-
-  let remaining = FREE_WAIT_SEC;
-  const iv = setInterval(() => {
-    if (freeUnlockDone) { clearInterval(iv); return; }
-    remaining--;
-    const elapsed = FREE_WAIT_SEC - remaining;
-    const progress = elapsed / FREE_WAIT_SEC;
-    circle.style.strokeDashoffset = circumference * (1 - progress);
-    document.getElementById('progress-fill').style.width = (progress * 100) + '%';
-
-    if (elapsed < AD_TIMEOUT_SEC) {
-      sub.textContent = 'Ad 1 of 2 loading…';
-    } else if (elapsed < AD_TIMEOUT_SEC + AD_INTERVAL_SEC) {
-      sub.textContent = 'Ad 1 of 2 shown — ad 2 of 2 loading…';
-    } else if (remaining > 0) {
-      sub.textContent = 'Ad 2 of 2 shown — finishing up…';
-    }
-
-    if (remaining <= 0) {
-      clearInterval(iv);
-      completeAdGate();
-    }
-  }, 1000);
-  window._adGateIv = iv;
-}
-
-function completeAdGate() {
-  if (freeUnlockDone) return;
-  freeUnlockDone = true;
-  clearInterval(window._adGateIv);
-
-  const ring = document.getElementById('ring-1');
-  const num  = document.getElementById('num-1');
-  const step = document.getElementById('step-1');
-  const sub  = document.getElementById('sub-1');
-
-  ring.classList.remove('active');
-  num.childNodes[0].textContent = '✓';
-  step.classList.add('done');
-  sub.textContent = 'Both ads shown ✓';
-
-  document.getElementById('progress-fill').style.width = '100%';
-  document.getElementById('progress-label').textContent = 'Ready!';
-  document.getElementById('ad-notice').textContent = '✅ Ads watched — your link is unlocked.';
-
-  unlockEnroll();
-  launchConfetti();
-}
-
 function unlockEnroll() {
   const btn = document.getElementById('btn-enroll');
   btn.disabled  = false;
@@ -1028,8 +1022,9 @@ function launchConfetti() {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  Bootstrap — no ad SDK is ever called automatically. Course data
-//  loads, then the 2-ad gate countdown starts automatically.
+//  Bootstrap — the Monetag SDK is never called automatically here.
+//  Course data loads and the card is shown; each ad only fires when
+//  the user taps its "Watch Ad" button (see watchAd()).
 // ══════════════════════════════════════════════════════════════
 window.addEventListener('load', () => {
   loadCourseMeta();
@@ -1037,7 +1032,6 @@ window.addEventListener('load', () => {
   loadLatestCourses();
 
   showCard();
-  startAdGateCountdown();
 });
 </script>
 
