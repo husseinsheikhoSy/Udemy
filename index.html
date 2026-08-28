@@ -32,22 +32,22 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
-  <!-- Adsgram SDK — Task block (native ad card in the course grid) -->
-  <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+  <!-- Monetag SDK — preloaded here for ad readiness across the Mini App -->
+  <script src='//libtl.com/sdk.js' data-zone='11675677' data-sdk='show_11675677'></script>
 
   <style>
-    /* ══ Damascus blue + white tokens — shared with details.html ══ */
+    /* ══ Burgundy / wine / cherry-red tokens — shared with details.html ══ */
     :root {
-      --bg:             #F2F8FE;
+      --bg:             #FBF1F2;
       --card:           #FFFFFF;
-      --text:           #142B45;
-      --text-muted:     #6F8CA8;
-      --border:         #DCEBFA;
-      --accent:         #1173D4;
-      --accent-dark:    #0B5AA8;
-      --accent-pale:    #E4F1FC;
+      --text:           #3A0E16;
+      --text-muted:     #97616B;
+      --border:         #F0D6DA;
+      --accent:         #7A1E2E;
+      --accent-dark:    #52121C;
+      --accent-pale:    #F5E1E4;
       --radius-card:    16px;
-      --shadow-card:    0 4px 24px rgba(20,43,69,.10);
+      --shadow-card:    0 4px 24px rgba(58,14,22,.10);
     }
     *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
     body {
@@ -104,22 +104,6 @@
     }
     .course-card:active { transform: scale(.98); }
 
-    /* ── Adsgram Task block — styled to sit naturally in the grid,
-       clearly labeled as sponsored via the "reward" slot text below ── */
-    adsgram-task.task {
-      display: block;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-card);
-      box-shadow: var(--shadow-card);
-      padding: 12px;
-      --adsgram-task-font-size: 14px;
-      --adsgram-task-icon-size: 44px;
-      --adsgram-task-icon-title-gap: 12px;
-      --adsgram-task-icon-border-radius: 10px;
-      --adsgram-task-button-width: 84px;
-    }
-
     .course-thumb {
       width: 76px; height: 76px; border-radius: 10px;
       background: var(--accent);
@@ -154,7 +138,7 @@
     }
     .skel-thumb { width:76px; height:76px; border-radius:10px; flex-shrink:0; }
     .skel-line, .skel-thumb {
-      background: linear-gradient(90deg, #DCEBFA 25%, #F2F8FE 50%, #DCEBFA 75%);
+      background: linear-gradient(90deg, #F0D6DA 25%, #FBF1F2 50%, #F0D6DA 75%);
       background-size: 200% 100%;
       animation: shimmer 1.4s infinite;
       border-radius: 6px;
@@ -402,15 +386,7 @@
 
         countEl.textContent = data.length + (count && count > data.length ? '+' : '');
 
-        // Native Task ad — a single sponsored card mixed naturally into
-        // the grid (after the 4th course). Pure browsing content, so it
-        // never touches any core action — fully compliant with Adsgram's
-        // "no ad required for basic functions" rule.
-        const taskCardHTML =
-          `<adsgram-task data-block-id="task-40716" data-debug="false" class="task"></adsgram-task>`;
         const cards = data.map(courseCardHTML);
-        if (cards.length > 4) cards.splice(4, 0, taskCardHTML);
-        else cards.push(taskCardHTML);
         gridEl.innerHTML = cards.join('');
 
         gridEl.querySelectorAll('.course-card').forEach(el => {
