@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>DAILY UDEMY COUPONS — Free Udemy Courses</title>
+
+  <script src="https://telegram.org/js/telegram-web-app.js?56"></script>
+
+  <!-- ══ Redirect immediately if this launch carries a startapp payload ══
+       Channel post buttons still link to t.me/UdemySybot/Udemy?startapp=...
+       Telegram always opens the Mini App's registered root URL (this file)
+       and forwards startapp as start_param — so we hand off to the
+       single-course detail page before rendering the catalog. -->
+  <script>
+    (function () {
+      var tg = window.Telegram && window.Telegram.WebApp;
+      var qs = new URLSearchParams(window.location.search);
+      var startParam =
+        (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) ||
+        qs.get('startapp') ||
+        qs.get('tgWebAppStartParam');
+      if (startParam) {
+        window.location.replace('details.html?startapp=' + encodeURIComponent(startParam));
+      }
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+  <!-- Adsgram SDK — Task block (native ad card in the course grid) -->
+  <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+
+  <style>
+    /* ══ Damascus blue + white tokens — shared with details.html ══ */
+    :root {
+      --bg:             #F2F8FE;
+      --card:           #FFFFFF;
+      --text:           #142B45;
+      --text-muted:     #6F8CA8;
+      --border:         #DCEBFA;
+      --accent:         #1173D4;
+      --accent-dark:    #0B5AA8;
+      --accent-pale:    #E4F1FC;
+      --radius-card:    16px;
+      --shadow-card:    0 4px 24px rgba(20,43,69,.10);
+    }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .app-shell { width:100%; max-width:520px; margin:0 auto; }
+
+    /* ── Top bar ── */
+    .top-bar {
+      position: sticky; top:0; z-index:10;
+      background: var(--card);
+      padding: 16px 18px 14px;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo-u {
+      width: 34px; height: 34px; border-radius: 9px;
+      background: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 800; color: #fff;
+      flex-shrink: 0;
+    }
+    .top-title { font-size: 15px; font-weight: 800; }
+    .top-sub   { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
+    .count-badge {
+      margin-left: auto;
+      background: var(--accent-pale); color: var(--accent-dark);
+      font-size: 11px; font-weight: 700;
+      padding: 5px 10px; border-radius: 20px;
+      white-space: nowrap;
+    }
+
+    /* ── Grid ── */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      padding: 14px 14px 28px;
+    }
+
+    .course-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+      padding: 12px;
+      display: flex; gap: 12px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform .12s ease;
+    }
+    .course-card:active { transform: scale(.98); }
+
+    /* ── Adsgram Task block — styled to sit naturally in the grid,
+       clearly labeled as sponsored via the "reward" slot text below ── */
+    adsgram-task.task {
+      display: block;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+      padding: 12px;
+      --adsgram-task-font-size: 14px;
+      --adsgram-task-icon-size: 44px;
+      --adsgram-task-icon-title-gap: 12px;
+      --adsgram-task-icon-border-radius: 10px;
+      --adsgram-task-button-width: 84px;
+    }
+
+    .course-thumb {
+      width: 76px; height: 76px; border-radius: 10px;
+      background: var(--accent);
+      flex-shrink: 0; overflow: hidden;
+      display: flex; align-items:center; justify-content:center;
+      font-size: 30px;
+    }
+    .course-thumb img { width:100%; height:100%; object-fit:cover; }
+
+    .course-body { flex:1; min-width:0; display:flex; flex-direction:column; }
+    .course-title {
+      font-size: 13.5px; font-weight: 700; line-height: 1.3;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .course-tags { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+    .tag {
+      font-size: 10.5px; font-weight: 700;
+      padding: 2px 7px; border-radius: 5px;
+      background: var(--accent-pale); color: var(--accent-dark);
+    }
+    .tag.left-tag { background: var(--accent); color:#fff; }
+    .course-price { font-size: 11.5px; margin-top: auto; padding-top:6px; color: var(--text-muted); }
+    .course-price s { color:#A6A499; }
+    .course-price .free { color: var(--accent-dark); font-weight: 800; font-size: 12.5px; margin-left:4px; }
+
+    /* ── Skeleton ── */
+    .skel-card {
+      background: var(--card); border:1px solid var(--border);
+      border-radius: var(--radius-card); padding:12px;
+      display:flex; gap:12px;
+    }
+    .skel-thumb { width:76px; height:76px; border-radius:10px; flex-shrink:0; }
+    .skel-line, .skel-thumb {
+      background: linear-gradient(90deg, #DCEBFA 25%, #F2F8FE 50%, #DCEBFA 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 6px;
+    }
+    .skel-lines { flex:1; display:flex; flex-direction:column; gap:8px; justify-content:center; }
+    .skel-line { height: 11px; }
+    .skel-line.w60 { width:60%; }
+    .skel-line.w40 { width:40%; }
+    @keyframes shimmer { 0%{background-position:200% 0;} 100%{background-position:-200% 0;} }
+
+    /* ── Empty / error state ── */
+    .empty-state {
+      text-align: center; padding: 60px 24px; color: var(--text-muted);
+    }
+    .empty-state .emoji { font-size: 40px; margin-bottom: 10px; }
+    .empty-state h3 { color: var(--text); font-size: 15px; margin-bottom: 6px; }
+    .empty-state p  { font-size: 12.5px; line-height:1.5; }
+    .retry-btn {
+      margin-top: 14px; background: var(--accent); color:#fff; border:none;
+      padding: 9px 18px; border-radius: 10px; font-weight:700; font-size:13px;
+      cursor:pointer;
+    }
+
+    .footer-link {
+      text-align:center; padding: 4px 20px 26px;
+    }
+    .whatsapp-btn {
+      display: flex; align-items:center; justify-content:center; gap: 8px;
+      width: 100%;
+      background: var(--accent); color:#fff;
+      font-weight: 800; font-size: 13.5px; letter-spacing: .2px;
+      text-decoration: none;
+      padding: 13px 18px; border-radius: 12px;
+      box-shadow: var(--shadow-card);
+      -webkit-tap-highlight-color: transparent;
+      transition: transform .12s ease, background .15s ease;
+    }
+    .whatsapp-btn:active { transform: scale(.97); background: var(--accent-dark); }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="top-bar">
+      <div class="logo-u">U</div>
+      <div>
+        <div class="top-title">DAILY UDEMY COUPONS</div>
+        <div class="top-sub">Fresh free courses, every day</div>
+      </div>
+      <div class="count-badge" id="count-badge">…</div>
+    </div>
+
+    <div class="grid" id="grid">
+      <!-- skeleton placeholders while loading -->
+      <div class="skel-card"><div class="skel-thumb"></div>
+        <div class="skel-lines"><div class="skel-line w60"></div><div class="skel-line w40"></div></div></div>
+      <div class="skel-card"><div class="skel-thumb"></div>
+        <div class="skel-lines"><div class="skel-line w60"></div><div class="skel-line w40"></div></div></div>
+      <div class="skel-card"><div class="skel-thumb"></div>
+        <div class="skel-lines"><div class="skel-line w60"></div><div class="skel-line w40"></div></div></div>
+    </div>
+
+    <div class="footer-link">
+      <a class="whatsapp-btn" href="https://whatsapp.com/channel/0029VaC7Weq29753hpcggW2A" target="_blank" rel="noopener">
+        📲 Join Our WhatsApp Channel
+      </a>
+    </div>
+  </div>
+
+  <script>
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg) { tg.ready(); tg.expand(); }
+
+    // ── Supabase client (publishable/anon key — read-only from here) ──
+    const SUPABASE_URL = "https://wqnxyxrbtvmasuvdogrg.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_63UWVbOlukOiUqsmtfQ9Jw_Go1dV3tt";
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const gridEl  = document.getElementById('grid');
+    const countEl = document.getElementById('count-badge');
+
+    // ── Debug logging — always to console; also on-screen if the page
+    //    is opened with ?debug=1 appended to the URL. Use this to see,
+    //    on a real device, whether Telegram is even handing us a user
+    //    object (tg.initDataUnsafe.user) and whether the RPC call itself
+    //    is succeeding or being rejected. ─────────────────────────────
+    const DEBUG = new URLSearchParams(window.location.search).get('debug') === '1';
+    function debugLog(...args) {
+      console.log('[MiniApp]', ...args);
+      if (!DEBUG) return;
+      let box = document.getElementById('__debug_box');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = '__debug_box';
+        box.style.cssText = 'position:fixed;bottom:0;left:0;right:0;max-height:40vh;' +
+          'overflow:auto;background:rgba(0,0,0,.88);color:#7CFC7C;font:11px monospace;' +
+          'padding:8px;z-index:99999;white-space:pre-wrap;';
+        document.body.appendChild(box);
+      }
+      const line = document.createElement('div');
+      line.textContent = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+      box.appendChild(line);
+    }
+
+    // ── Register/refresh this visitor in bot_users ──────────────────
+    // Calls register_mini_app_visitor() — the same RPC details.html uses —
+    // keyed on the visitor's real Telegram chat_id (tg.initDataUnsafe.user.id).
+    // chat_id is the table's primary key and the RPC does an upsert on it,
+    // so opening index.html, details.html, and/or /start in the bot — any
+    // order, any number of times — still produces exactly one bot_users
+    // row, never a duplicate. Skipped entirely if the page isn't opened
+    // inside Telegram with valid initData (no tg user object available),
+    // so random web visitors are never logged.
+    async function registerVisitor() {
+      const tgUser = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+      debugLog('initDataUnsafe.user =', tgUser || null);
+
+      if (!tgUser || !tgUser.id) {
+        debugLog('registerVisitor: SKIPPED — no Telegram user in initData. ' +
+          'This means the page was not opened as a real Telegram Mini App ' +
+          '(check the Mini App URL / menu button setup in @BotFather).');
+        return;
+      }
+
+      let countryCode = null, countryName = null;
+      try {
+        const geo = await fetch('https://ipapi.co/json/').then(r => r.json());
+        if (geo && !geo.error) {
+          countryCode = geo.country_code || null;
+          countryName = geo.country_name || null;
+        }
+      } catch (e) { /* geolocation lookup is best-effort only */ }
+
+      const { error } = await sb.rpc('register_mini_app_visitor', {
+        p_chat_id: tgUser.id,
+        p_username: tgUser.username || null,
+        p_first_name: tgUser.first_name || null,
+        p_country_code: countryCode,
+        p_country_name: countryName
+      });
+
+      // Previously this result was never checked, so RPC failures (RLS,
+      // missing function, bad params, etc.) were silently swallowed —
+      // nothing was saved AND no error appeared anywhere. Fixed now.
+      if (error) {
+        console.error('registerVisitor: RPC failed:', error);
+        debugLog('registerVisitor: RPC FAILED —', error.message || error);
+      } else {
+        debugLog('registerVisitor: OK — chat_id', tgUser.id, 'registered/updated.');
+      }
+    }
+    registerVisitor();
+
+    // ── Build the same base64url "startapp" payload the bot builds,
+    //    so details.html?startapp=... decodes it with zero changes. ──
+    function b64urlEncode(str) {
+      const bytes = new TextEncoder().encode(str);
+      let binary = '';
+      bytes.forEach(b => binary += String.fromCharCode(b));
+      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function buildStartParam(course) {
+      const payload = { u: course.udemy_url || course.detail_url };
+      if (course.title)            payload.t = course.title.slice(0, 70);
+      if (course.image_url)        payload.i = course.image_url;
+      if (course.category && course.category !== 'N/A') payload.c = course.category.slice(0, 30);
+      if (course.price_str)        payload.p = course.price_str.replace(/<[^>]+>/g, '');
+      if (course.enrollments_left && !['N/A', '0', ''].includes(course.enrollments_left)) {
+        payload.l = course.enrollments_left;
+      }
+      let encoded = b64urlEncode(JSON.stringify(payload));
+      // Same 512-char safety trim as the bot, in the same drop order.
+      const tryEncode = (p) => b64urlEncode(JSON.stringify(p));
+      if (encoded.length > 512) { delete payload.i; encoded = tryEncode(payload); }
+      if (encoded.length > 512) { delete payload.c; encoded = tryEncode(payload); }
+      if (encoded.length > 512) { delete payload.p; encoded = tryEncode(payload); }
+      if (encoded.length > 512 && payload.t) { payload.t = payload.t.slice(0, 30); encoded = tryEncode(payload); }
+      if (encoded.length > 512) { encoded = tryEncode({ u: payload.u }); }
+      return encoded;
+    }
+
+    function openCourse(course) {
+      const startapp = buildStartParam(course);
+      window.location.href = 'details.html?startapp=' + startapp;
+    }
+
+    function renderEmpty(message, sub) {
+      gridEl.innerHTML = `
+        <div class="empty-state">
+          <div class="emoji">🎓</div>
+          <h3>${message}</h3>
+          <p>${sub}</p>
+          <button class="retry-btn" onclick="loadCourses()">Retry</button>
+        </div>`;
+    }
+
+    function courseCardHTML(c) {
+      const img = c.image_url
+        ? `<img src="${c.image_url}" alt="" onerror="this.parentElement.innerHTML='🎓'" />`
+        : '🎓';
+      const catTag = (c.category && c.category !== 'N/A')
+        ? `<span class="tag">${c.category}</span>` : '';
+      const leftTag = (c.enrollments_left && !['N/A','0',''].includes(c.enrollments_left))
+        ? `<span class="tag left-tag">🔥 ${c.enrollments_left} left</span>` : '';
+      const priceHTML = c.price_str
+        ? `${c.price_str} <span class="free">FREE</span>`
+        : `<span class="free">🆓 FREE</span>`;
+      return `
+        <div class="course-card" data-id="${encodeURIComponent(c.detail_url)}">
+          <div class="course-thumb">${img}</div>
+          <div class="course-body">
+            <div class="course-title">${c.title}</div>
+            <div class="course-tags">${catTag}${leftTag}</div>
+            <div class="course-price">${priceHTML}</div>
+          </div>
+        </div>`;
+    }
+
+    async function loadCourses() {
+      countEl.textContent = '…';
+      try {
+        // Merged from two independent source tables — the catalog is
+        // presented as a single unified feed, the user never sees which
+        // site a course originally came from.
+        const [r1, r2] = await Promise.all([
+          sb.from('courses').select('*', { count: 'exact' })
+            .eq('is_active', true).order('created_at', { ascending: false }).limit(60),
+          sb.from('courses_udemyxpert').select('*', { count: 'exact' })
+            .eq('is_active', true).order('created_at', { ascending: false }).limit(60),
+        ]);
+
+        if (r1.error) throw r1.error;
+        if (r2.error) throw r2.error;
+
+        const data = [...(r1.data || []), ...(r2.data || [])]
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+          .slice(0, 60);
+        const count = (r1.count || 0) + (r2.count || 0);
+
+        if (!data || data.length === 0) {
+          countEl.textContent = '0';
+          renderEmpty('No courses right now', 'New free courses are added throughout the day — check back soon.');
+          return;
+        }
+
+        countEl.textContent = data.length + (count && count > data.length ? '+' : '');
+
+        // Native Task ad — a single sponsored card mixed naturally into
+        // the grid (after the 4th course). Pure browsing content, so it
+        // never touches any core action — fully compliant with Adsgram's
+        // "no ad required for basic functions" rule.
+        const taskCardHTML =
+          `<adsgram-task data-block-id="task-40716" data-debug="false" class="task"></adsgram-task>`;
+        const cards = data.map(courseCardHTML);
+        if (cards.length > 4) cards.splice(4, 0, taskCardHTML);
+        else cards.push(taskCardHTML);
+        gridEl.innerHTML = cards.join('');
+
+        gridEl.querySelectorAll('.course-card').forEach(el => {
+          el.addEventListener('click', () => {
+            const course = data.find(c => encodeURIComponent(c.detail_url) === el.dataset.id);
+            if (course) openCourse(course);
+          });
+        });
+      } catch (err) {
+        console.error(err);
+        countEl.textContent = '!';
+        renderEmpty('Could not load courses', 'Check your connection and try again.');
+      }
+    }
+
+    loadCourses();
+  </script>
+</body>
+</html>
