@@ -211,6 +211,30 @@
     const tg = window.Telegram && window.Telegram.WebApp;
     if (tg) { tg.ready(); tg.expand(); }
 
+    // ── Monetag In-App Interstitial (zone 11675677) ──────────────────
+    // This page is a passive browsing/catalog page (no gated reward
+    // action here — that lives on details.html), so the In-App
+    // Interstitial format is the right fit: it shows itself
+    // automatically according to the timing settings below, doesn't
+    // require any click, and doesn't promise the user a reward.
+    // frequency: 1  → show once per session on this page
+    // timeout: 6    → wait 6s after the page opens before showing it,
+    //                 so it doesn't compete with the catalog loading
+    // capping: 0.1  → Monetag's own frequency-capping guard (hours)
+    (function startInAppInterstitial() {
+      if (typeof show_11675677 !== 'function') return;
+      show_11675677({
+        type: 'inApp',
+        inAppSettings: {
+          frequency: 1,
+          capping: 0.1,
+          interval: 30,
+          timeout: 6,
+          everyPage: false
+        }
+      });
+    })();
+
     // ── Supabase client (publishable/anon key — read-only from here) ──
     const SUPABASE_URL = "https://wqnxyxrbtvmasuvdogrg.supabase.co";
     const SUPABASE_KEY = "sb_publishable_63UWVbOlukOiUqsmtfQ9Jw_Go1dV3tt";
