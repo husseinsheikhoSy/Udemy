@@ -90,8 +90,9 @@
   })();
   </script>
 
-  <!-- Adsgram SDK — https://partner.adsgram.ai/platforms/24966/ (only ad provider) -->
-  <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+  <!-- Monetag SDK — only ad provider. Preloaded here; the in-app interstitial
+       is triggered further down once the page has loaded. -->
+  <script src='//libtl.com/sdk.js' data-zone='11675677' data-sdk='show_11675677'></script>
 
   <!-- Supabase JS SDK — used to register this visitor (bot_users) and to
        show the "Latest Courses" section below the enroll button -->
@@ -106,19 +107,19 @@
        Damascus blue + white design tokens
        ══════════════════════════════════════════════════════════ */
     :root {
-      --bg:             #F2F8FE;
+      --bg:             #FBF1F2;
       --card:           #FFFFFF;
-      --text:           #142B45;
-      --text-muted:     #6F8CA8;
-      --border:         #DCEBFA;
-      --accent:         #1173D4;
-      --accent-dark:    #0B5AA8;
-      --accent-pale:    #E4F1FC;
-      --step-done-bg:   #E4F1FC;
-      --step-done-text: #0B5AA8;
+      --text:           #3A0E16;
+      --text-muted:     #97616B;
+      --border:         #F0D6DA;
+      --accent:         #7A1E2E;
+      --accent-dark:    #52121C;
+      --accent-pale:    #F5E1E4;
+      --step-done-bg:   #F5E1E4;
+      --step-done-text: #52121C;
       --radius-card:    20px;
       --radius-btn:     10px;
-      --shadow-card:    0 4px 24px rgba(20,43,69,.10);
+      --shadow-card:    0 4px 24px rgba(58,14,22,.10);
     }
 
     *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
@@ -195,7 +196,7 @@
     }
     .skeleton.visible { display: block; }
     .skel-line {
-      background: linear-gradient(90deg, #DCEBFA 25%, #F2F8FE 50%, #DCEBFA 75%);
+      background: linear-gradient(90deg, #F0D6DA 25%, #FBF1F2 50%, #F0D6DA 75%);
       background-size: 200% 100%;
       border-radius: 6px; margin-bottom: 10px;
       animation: shimmer 1.4s infinite;
@@ -379,23 +380,6 @@
       font-size: 20px; pointer-events: none; padding: 0 12px; box-shadow:none;
     }
 
-    /* ── Adsgram Task block — sits below the enroll button, styled to
-       match the card system without disturbing any other element ── */
-    adsgram-task.task {
-      display: block;
-      margin-top: 14px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-card);
-      box-shadow: var(--shadow-card);
-      padding: 12px;
-      --adsgram-task-font-size: 14px;
-      --adsgram-task-icon-size: 44px;
-      --adsgram-task-icon-title-gap: 12px;
-      --adsgram-task-icon-border-radius: 10px;
-      --adsgram-task-button-width: 84px;
-    }
-
     /* ── CTA ── */
     .cta-btn {
       width: 100%; padding: 14px; border-radius: 14px; border: none;
@@ -574,41 +558,34 @@
       <div class="feature-item"><span class="feature-check">✓</span> Certificate on Completion</div>
     </div>
 
-    <!-- Points balance (cosmetic reward — never required to unlock the course) -->
-    <div class="ad-notice" id="points-badge" style="display:none;">
-      ⭐ Your points: <strong id="points-value">0</strong> — earned only when you choose to watch a bonus ad. Skipping ads never costs you anything.
-    </div>
-    <div class="ad-notice" id="ad-notice" style="display:none;">
-      📋 No ad needed — your free link unlocks on its own in a few seconds. Prefer not to wait? Tap "⚡ Skip with ad" to unlock instantly and earn bonus points 🎁.
+    <div class="ad-notice" id="ad-notice" style="display:block;">
+      📋 Watch 2 short ads to unlock your free enroll link.
     </div>
 
     <div class="progress-wrap">
       <div class="progress-bar-bg">
         <div class="progress-bar-fill" id="progress-fill"></div>
       </div>
-      <span class="progress-label" id="progress-label">Preparing your link…</span>
+      <span class="progress-label" id="progress-label">Preparing your ads…</span>
     </div>
 
     <div class="steps">
-      <!-- Single free step: always unlocks on its own, ad is optional -->
+      <!-- Single gated step: tracks the 2 required Monetag in-app interstitial views -->
       <div class="step" id="step-1">
-        <div class="step-title">Preparing your link…</div>
-        <div class="step-sub" id="sub-1">Please wait a few seconds, or tap Skip.</div>
+        <div class="step-title">Watching sponsored ads…</div>
+        <div class="step-sub" id="sub-1">Ad 1 of 2 loading…</div>
         <div class="step-num" id="num-1">
           ⏳
           <svg class="countdown-ring" id="ring-1" viewBox="0 0 96 96">
             <circle cx="48" cy="48" r="42" id="ring-circle-1"/>
           </svg>
         </div>
-        <button class="step-btn" id="btn-1" onclick="startBonusAd()" style="margin-top:18px;">⚡ Skip with ad</button>
       </div>
     </div>
 
     <button class="cta-btn locked" id="btn-enroll" disabled>
-      🔒 Wait for the timer to finish
+      🔒 Watch 2 ads to unlock
     </button>
-
-    <adsgram-task data-block-id="task-40716" data-debug="false" class="task"></adsgram-task>
 
     <div class="success-msg" id="success-msg">
       🎉 You're all set! Click above to enroll for free.
@@ -650,74 +627,34 @@ const SUPABASE_KEY = "sb_publishable_63UWVbOlukOiUqsmtfQ9Jw_Go1dV3tt";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── Ad / unlock config ────────────────────────────────────────
-// IMPORTANT — Adsgram moderation clause 3 forbids gating ANY action
-// behind a mandatory ad. So the free link ALWAYS unlocks on its own
-// after FREE_WAIT_SEC, whether or not the user ever touches an ad.
-// Watching a bonus ad only (a) skips the wait, and (b) adds points —
-// pure upside, zero penalty for ignoring it.
-const FREE_WAIT_SEC   = 100;     // always-free countdown, no ad involved
-const ADSGRAM_BLOCK_ID = '25863'; // approved Reward block — https://partner.adsgram.ai/platforms/24966/
-const MAX_BONUS_ADS_PER_DAY = 10;
-const POINTS_PER_AD = 5;
+// Monetag in-app interstitial (zone 11675677) is configured to show
+// automatically: a 5s delay before the first ad, then a 2nd ad 30s
+// later (frequency: 2, timeout: 5, interval: 30). The enroll link
+// stays locked until both scheduled ad slots have had time to play,
+// so the user genuinely watches 2 ads before it opens.
+const AD_TIMEOUT_SEC   = 5;   // delay before ad #1
+const AD_INTERVAL_SEC  = 30;  // gap before ad #2
+const AD_BUFFER_SEC    = 5;   // grace period after ad #2 to let it finish/close
+const FREE_WAIT_SEC    = AD_TIMEOUT_SEC + AD_INTERVAL_SEC + AD_BUFFER_SEC; // total gate time
 
-let freeUnlockDone = false;
-let bonusPlaying    = false;
-let adsgramCtrl     = null;
+let freeUnlockDone  = false;
+let monetagStarted  = false;
 
-function getAdsgram() {
-  if (adsgramCtrl) return adsgramCtrl;
-  if (window.Adsgram && typeof window.Adsgram.init === 'function') {
-    adsgramCtrl = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
-  }
-  return adsgramCtrl;
-}
-
-// Shows a rewarded Adsgram ad. Resolves 'shown' | 'closed_early' | 'no_ad'.
-// Never called automatically — only in response to the user tapping
-// "⚡ Skip with ad", and never blocks the free countdown from finishing.
-//
-// Fairness rule: if no ad was available at all (SDK missing, no fill,
-// or any real error), that's not the user's fault — the caller unlocks
-// instantly with no penalty. Only a genuinely-started ad that the user
-// closed early keeps the normal wait, so the button can't be used to
-// dodge the countdown without ever watching anything.
-//
-// SAFETY TIMEOUT — on some Android/webview builds, when there's no fill
-// Adsgram's show() Promise sometimes never settles (neither resolves nor
-// rejects) instead of rejecting immediately like it does on desktop, so
-// the "⏳" button could get stuck forever. AD_TIMEOUT_MS guards against
-// exactly that: if nothing happens in time, we treat it as 'no_ad'.
-const AD_TIMEOUT_MS = 12000;
-
-function showAdsgramRewarded() {
-  return new Promise((resolve) => {
-    const ctrl = getAdsgram();
-    if (!ctrl) { resolve('no_ad'); return; }
-
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      resolve('no_ad'); // ad never even started rendering within the timeout
-    }, AD_TIMEOUT_MS);
-
-    ctrl.show()
-      .then(() => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve('shown'); // reward is granted only on a completed view
-      })
-      .catch((result) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        // Adsgram rejects with { done:false, error:true/false, state, description }.
-        // error === true (or state never reached 'playing') → no ad was actually
-        // shown to close early, so treat it as "no ad available".
-        const actuallyPlayed = result && result.state === 'playing';
-        resolve(actuallyPlayed ? 'closed_early' : 'no_ad');
-      });
+// Starts Monetag's in-app interstitial schedule. Safe to call once;
+// preloaded SDK tag lives in <head>.
+function startMonetagInAppInterstitial() {
+  if (monetagStarted) return;
+  monetagStarted = true;
+  if (typeof show_11675677 !== 'function') return;
+  show_11675677({
+    type: 'inApp',
+    inAppSettings: {
+      frequency: 2,
+      capping: 0.1,
+      interval: AD_INTERVAL_SEC,
+      timeout: AD_TIMEOUT_SEC,
+      everyPage: false
+    }
   });
 }
 
@@ -954,42 +891,6 @@ async function loadLatestCourses() {
   }
 }
 
-// ── Points — purely cosmetic bonus balance, never spent to access
-//   anything. Stored server-side (Supabase) keyed on Telegram chat_id
-//   so it persists across sessions/devices, capped at MAX_BONUS_ADS_PER_DAY
-//   ad-watches/day (enforced server-side in add_bonus_points()).
-async function addBonusPoints(amount) {
-  const tgUser = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
-  if (!tgUser || !tgUser.id) return;
-  try {
-    const { data, error } = await sb.rpc('add_bonus_points', {
-      p_chat_id: tgUser.id,
-      p_amount: amount,
-      p_max_per_day: MAX_BONUS_ADS_PER_DAY
-    });
-    if (!error && typeof data === 'number') showPointsBadge(data);
-  } catch (e) { /* non-critical */ }
-}
-
-async function refreshPointsBadge() {
-  const tgUser = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
-  if (!tgUser || !tgUser.id) return;
-  try {
-    const { data, error } = await sb
-      .from('user_points')
-      .select('points')
-      .eq('chat_id', tgUser.id)
-      .maybeSingle();
-    if (!error && data) showPointsBadge(data.points);
-  } catch (e) { /* non-critical */ }
-}
-
-function showPointsBadge(points) {
-  const badge = document.getElementById('points-badge');
-  document.getElementById('points-value').textContent = points;
-  badge.style.display = 'block';
-}
-
 // ── Show skeleton → card transition ──────────────────────────
 function showCard() {
   document.getElementById('skeleton').classList.remove('visible');
@@ -997,12 +898,15 @@ function showCard() {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  Always-free unlock — starts automatically on load, no ad
-//  involved, and NOTHING can stop it from finishing. This is what
-//  keeps the app inside Adsgram's allowed model: "basic functions
-//  are available without watching ads."
+//  Two-ad gate — the Monetag in-app interstitial schedule (started in
+//  startMonetagInAppInterstitial) shows ad #1 after AD_TIMEOUT_SEC and
+//  ad #2 after another AD_INTERVAL_SEC. The enroll button only unlocks
+//  once both slots have elapsed (plus a short buffer), so the join link
+//  never opens before the user has been shown both ads.
 // ══════════════════════════════════════════════════════════════
-function startFreeCountdown() {
+function startAdGateCountdown() {
+  startMonetagInAppInterstitial();
+
   const ring   = document.getElementById('ring-1');
   const circle = document.getElementById('ring-circle-1');
   const sub    = document.getElementById('sub-1');
@@ -1016,75 +920,48 @@ function startFreeCountdown() {
   const iv = setInterval(() => {
     if (freeUnlockDone) { clearInterval(iv); return; }
     remaining--;
-    const progress = (FREE_WAIT_SEC - remaining) / FREE_WAIT_SEC;
+    const elapsed = FREE_WAIT_SEC - remaining;
+    const progress = elapsed / FREE_WAIT_SEC;
     circle.style.strokeDashoffset = circumference * (1 - progress);
-    if (remaining > 0) {
-      sub.textContent = `Unlocking automatically in ${remaining}s…`;
-    } else {
+    document.getElementById('progress-fill').style.width = (progress * 100) + '%';
+
+    if (elapsed < AD_TIMEOUT_SEC) {
+      sub.textContent = 'Ad 1 of 2 loading…';
+    } else if (elapsed < AD_TIMEOUT_SEC + AD_INTERVAL_SEC) {
+      sub.textContent = 'Ad 1 of 2 shown — ad 2 of 2 loading…';
+    } else if (remaining > 0) {
+      sub.textContent = 'Ad 2 of 2 shown — finishing up…';
+    }
+
+    if (remaining <= 0) {
       clearInterval(iv);
-      completeFreeUnlock();
+      completeAdGate();
     }
   }, 1000);
-  window._freeCountdownIv = iv;
+  window._adGateIv = iv;
 }
 
-function completeFreeUnlock() {
+function completeAdGate() {
   if (freeUnlockDone) return;
   freeUnlockDone = true;
-  clearInterval(window._freeCountdownIv);
+  clearInterval(window._adGateIv);
 
   const ring = document.getElementById('ring-1');
   const num  = document.getElementById('num-1');
   const step = document.getElementById('step-1');
-  const btn  = document.getElementById('btn-1');
   const sub  = document.getElementById('sub-1');
 
   ring.classList.remove('active');
   num.childNodes[0].textContent = '✓';
   step.classList.add('done');
-  btn.disabled = true;
-  btn.style.display = 'none';
-  sub.textContent = 'Unlocked ✓';
+  sub.textContent = 'Both ads shown ✓';
 
   document.getElementById('progress-fill').style.width = '100%';
   document.getElementById('progress-label').textContent = 'Ready!';
+  document.getElementById('ad-notice').textContent = '✅ Ads watched — your link is unlocked.';
 
   unlockEnroll();
   launchConfetti();
-}
-
-// ── Bonus ad — 100% optional, only skips the wait + adds points.
-//   Never required, never blocks enroll, never re-locks anything.
-function startBonusAd() {
-  if (bonusPlaying) return;
-  bonusPlaying = true;
-
-  const btn = document.getElementById('btn-1');
-  btn.classList.add('watching');
-  btn.textContent = '⏳';
-
-  showAdsgramRewarded().then((status) => {
-    bonusPlaying = false;
-    btn.classList.remove('watching');
-    btn.textContent = '⚡ Skip with ad';
-
-    if (status === 'shown') {
-      addBonusPoints(POINTS_PER_AD);
-      completeFreeUnlock(); // instant unlock as the reward
-    } else if (status === 'no_ad') {
-      // Fairness: no ad was available at all — not the user's fault,
-      // so unlock instantly too, just without the points bonus.
-      document.getElementById('sub-1').textContent = 'No ad available — unlocked for free ✓';
-      completeFreeUnlock();
-    }
-    // 'closed_early' → an ad genuinely started and the user backed out of
-    // it — the free countdown just keeps running normally, no shortcut.
-  });
-}
-
-function updateProgress() {
-  document.getElementById('progress-fill').style.width  = freeUnlockDone ? '100%' : '0%';
-  document.getElementById('progress-label').textContent = freeUnlockDone ? 'Ready!' : 'Unlocking…';
 }
 
 function unlockEnroll() {
@@ -1152,17 +1029,15 @@ function launchConfetti() {
 
 // ══════════════════════════════════════════════════════════════
 //  Bootstrap — no ad SDK is ever called automatically. Course data
-//  loads, then the free countdown starts on its own; Adsgram is
-//  only touched if/when the user taps "Skip with ad".
+//  loads, then the 2-ad gate countdown starts automatically.
 // ══════════════════════════════════════════════════════════════
 window.addEventListener('load', () => {
   loadCourseMeta();
   registerVisitor();
   loadLatestCourses();
-  refreshPointsBadge();
 
   showCard();
-  startFreeCountdown();
+  startAdGateCountdown();
 });
 </script>
 
